@@ -10,17 +10,17 @@
 module Variable_Node #(parameter
     // 有多少个校验节点与该变量节点相连
     weight = 3,
-    // 浮点数的位数
-    float_length = 15
+    // 位宽
+    length = 15
     // 校验节点更新值输入的总位数
-    `define total_length (weight*float_length)
+    `define total_length (weight*length)
 )(
     // 时钟端
     input clk,
     // 清零端 
     input rst,
     // 初始值
-    input [float_length-1:0]initial_value,
+    input [length-1:0]initial_value,
     // 校验节点的更新值
     input [`total_length-1:0]check_value_input,
     // 校验节点更新值可用
@@ -28,7 +28,7 @@ module Variable_Node #(parameter
     // 判决结束
     input decision_down,
     // 变量节点更新值
-    output reg [float_length-1:0]variable_value,
+    output reg [length-1:0]variable_value,
     // 变量节点更新完毕
     output reg variable_enable
     );
@@ -36,11 +36,11 @@ module Variable_Node #(parameter
     reg [1:0] variable_state;
     
     // 将输入的check_value一一分解
-    wire [float_length-1:0]check_value[weight-1:0];
+    wire [length-1:0]check_value[weight-1:0];
     genvar i;
     generate
         for(i = 0; i < weight; i=i+1)begin:split
-          assign check_value[i]  = check_value_input[(float_length*(i+1)-1) : float_length*i];
+          assign check_value[i]  = check_value_input[(length*(i+1)-1) : length*i];
         end
     endgenerate
 

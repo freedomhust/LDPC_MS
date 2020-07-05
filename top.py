@@ -10,12 +10,17 @@ row_weight = 6
 column_weight = 3
 length = 6
 
+# 单次译码过程中，迭代的最大次数
+decision_time_max = 50
+
 
 top_file = r'H:\\LDPC_MS\\top.v'
 string = '''
 module top(
 input clk,
 input rst,
+input demodulation_down_to_decoder,
+output reg demodulation_to_decoder_receive,
 '''
 
 # 先将top模块的接口定义了
@@ -124,25 +129,113 @@ with open(file_path_column,'r') as f_column:
 with open(top_file,'a',encoding='utf-8') as f:
     f.write(string)
 
+
+# 和外面的解调部分交互的逻辑
+string = ''
+string += '''
+always@(*)begin
+    // 调制结束，开始进行译码
+    if(demodulation_down_to_decoder)begin
+        initial_value_enable = 0-1;
+    end
+    else begin
+        initial_value_enable = 0;
+    end
+    // 所有变量节点在初始化的时候信号是一致的，所以只需要对第一个变量节点进行讨论就行
+    if(initial_down[0])begin
+        demodulation_to_decoder_receive = 1;
+    end
+    else begin
+        demodulation_to_decoder_receive = 0;
+    end
+end
+'''
+with open(top_file,'a',encoding='utf-8') as f:
+    f.write(string)
+
+
+
 # 校验部分
 string = ''
-string += '// 将变量节点的enable值全部合并一下'
+string += '// 将变量节点的enable值全部合并一下\n'
 for i in range(column):
     string += f'assign decision_variable_enable[{i}] = enable_variable_{i}_to_check;\n'
 string += '''
+integer i;
 always@(posedge clk or negedge rst)begin
 if(~rst)begin
+i <= 0;
 decision_state <= 0;
 decision_down <= 0;
 decision_success <= 0;
 decision_information <= 0;
+decision_times <= 0;
+decision_result <= 0;
+decision_time_max <= 0;
 end
 else begin
 case(decision_state)
-1'b0: begin
-if( 
+3'd0: begin
+// 如果发现变量节点全部更新完毕,将变量节点的值进行判决然后计算
+if(~decision_variable_enable == 0) begin
+'''
+for i in range(column):
+    string += f'decision_information[{i}] <= value_variable_{i}_to_check;\n'
+string += f'// 变更状态，开始进行校验\n'
+string += "decision_state <= 3'd1;\n"
+string += 'end\nend\n'
+
+string += '''
+// 开始校验
+3'd1: begin
+    // 一个周期完成校验
+    decision_result[{i}] <= decision_information[] ^ decision_information[] ...
+    decision_state <= 3'd2;
+end
+
+3'd2: begin
+    // 校验成功
+    if(decision_result == 0)begin
+        decision_down <= 1;
+        decision_success <= 1;
+        // 让校验成功信号多保持一个周期
+        decision_state <= 3'd4;
+    end
+    //此次校验没有成功
+    else begin
+        decision_down <= 1;
+        decision_success <= 0;
+        if(decision_times == {decision_times_max}) begin 
+            decision_times_max <= 1;
+            decision_state <= 3'd4;
+        end
+        else begin 
+            decision_times <= decision_times+1;
+            decision_state <= 3'd3;
+        end
+    end
+end
+
+3'd3: begin
+    decision_down <= 0;
+    decision_times_max <= 0;
+    decision_success <= 0;
+    decision_state <= 3'd0;
+end
+
+// 拖延一周期时间
+3'd4: begin
+    decision_times <= 0;
+    decision_state <= 3'd3;
+end
+
+end
 '''
 
 
+
 with open(top_file,'a',encoding='utf-8') as f:
+    f.write('endcase')
+    f.write('end')
+    f.write('end')
     f.write('endmodule')
