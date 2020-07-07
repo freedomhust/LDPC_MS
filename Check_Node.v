@@ -12,10 +12,10 @@
 module Check_Node #(parameter
   // 校验节点与多少个变量节点相连
   weight = 6,
-  // 浮点数的位宽
-  float_length = 15
+  // 位宽
+  length = 15
   // 变量节点输入和校验节点输出的总位数
-  `define total_length (weight*float_length)
+  `define total_length (weight*length)
 )(
   // 时钟端
   input clk,
@@ -44,13 +44,13 @@ module Check_Node #(parameter
   // 最小和算法中的符号值
   reg  sign;
   // 最小值
-  reg  [float_length-1:0] Minimum_value;
+  reg  [length-1:0] Minimum_value;
   // 次小值
-  reg  [float_length-1:0] Second_Minimum_value;
+  reg  [length-1:0] Second_Minimum_value;
   // 给不同变量节点的更新值
-  reg  [float_length-1:0] check_value[weight-1:0];
+  reg  [length-1:0] check_value[weight-1:0];
   // 变量节点的绝对值
-  wire [float_length-1:0] variable_value[weight-1:0];
+  wire [length-1:0] variable_value[weight-1:0];
   // 校验节点更新值有效
   reg  check_enable[weight-1:0];
   // 变量节点值有效
@@ -62,9 +62,9 @@ module Check_Node #(parameter
   genvar k;
   generate
     for (k = 0; k<weight; k=k+1) begin
-      assign variable_value[k] = variable_value_input[float_length*(k+1) - 1] ? ~(variable_value_input[float_length*(k+1) - 1 : float_length*k])+'d1 : variable_value_input[float_length*(k+1) - 1 : float_length*k];
+      assign variable_value[k] = variable_value_input[length*(k+1) - 1] ? ~(variable_value_input[length*(k+1) - 1 : length*k])+'d1 : variable_value_input[length*(k+1) - 1 : length*k];
       assign variable_enable[k] = variable_enable_input[k];
-      assign variable_value_sign[k] = variable_value_input[float_length*(k+1)-1];
+      assign variable_value_sign[k] = variable_value_input[length*(k+1)-1];
     end
   endgenerate
 
@@ -72,7 +72,7 @@ module Check_Node #(parameter
   // 调整输出格式
   generate
     for (k = 0; k<weight; k=k+1) begin
-      assign check_value_output[float_length*(k+1) - 1 : float_length*k] = check_value[k];
+      assign check_value_output[length*(k+1) - 1 : length*k] = check_value[k];
       assign check_enable_output[k] = check_enable[k];
     end
   endgenerate

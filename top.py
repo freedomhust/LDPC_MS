@@ -4,15 +4,14 @@
 
 file_path_row = r'H:\\LDPC_MS\\row.txt'
 file_path_column = r'H:\\LDPC_MS\\column.txt'
-row = 6
-column = 12
+row_number = 6
+column_number = 12
 row_weight = 6
 column_weight = 3
 length = 6
 
 # 单次译码过程中，迭代的最大次数
 decision_time_max = 50
-
 
 top_file = r'H:\\LDPC_MS\\top.v'
 string = '''
@@ -21,16 +20,41 @@ input clk,
 input rst,
 input demodulation_down_to_decoder,
 output reg demodulation_to_decoder_receive,
+// 解调后的数据
 '''
+# 解调后的数据
+string += f'input [{length*column_number-1}:0]initial_value_input,\n'
+string += f'output reg decoder_down\n);\n'
 
 # 先将top模块的接口定义了
 with open(top_file,'w',encoding='utf-8') as f:
     f.write(string)
-    for index in range(column):
-        string = f'input initial_value_{index},\n'
-        f.write(string)
-    string = 'output reg decoder_finish\n);\n'
+
+# 对initial_value进行拆分
+string = ''
+string += '// 对initial_value进行拆分\n'
+string += f'wire [{length-1}:0] initial_value[{column_number-1}:0];\n'
+for i in range(column_number):
+    string += f'assign initial_value[{i}] = initial_value_input[{(i+1)*length-1}:{i*length}];\n'
+with open(top_file,'a',encoding='utf-8') as f:
     f.write(string)
+
+# 定义跟判决部分有关的变量
+string = ''
+string += f'reg [{column_number-1}:0]initial_value_enable;\n'
+string += f'wire [{column_number-1}:0]initial_down;\n'
+string += f'reg check_begin;\n'
+string += f'reg [2:0] decision_state;\n'
+string += f'reg decision_down;\n'
+string += f'reg decision_success;\n'
+string += f'reg [{column_number-1}:0]decision_information;\n'
+string += f'reg [9:0] decision_times;\n'
+string += f'reg [{column_number-1}:0]decision_result;\n'
+string += f'reg decision_time_max;\n'
+string += f'wire [{column_number-1}:0]decision_variable_enable;\n'
+with open(top_file,'a',encoding='utf-8') as f:
+    f.write(string)
+
 
 
 # 打开row.txt,定义相关的变量
@@ -99,7 +123,7 @@ with open(file_path_row,'r') as f_row:
     for index,row in enumerate(lines):
         string += f'// 校验节点{index}\n'
         string += f'Check_Node #(.weight({row_weight}),.length({length})) u_Check_Node_{index}(\n.clk(clk),\n.rst(rst),\n'
-        string += f'.check_begin(),\n'
+        string += f'.check_begin(check_begin),\n'
         string += f'.variable_value_input(value_check_to_variable_{index}),\n'
         string += f'.variable_enable_input(enable_check_to_variable_{index}),\n'
         string += f'.decision_down(),\n'
@@ -118,10 +142,13 @@ with open(file_path_column,'r') as f_column:
     for index,column in enumerate(lines):
         string += f'// 变量节点{index}\n'
         string += f'Variable_Node #(.weight({column_weight}), .length({length})) u_Variable_Node_{index}(\n.clk(clk),\n.rst(rst),\n'
-        string += f'.initial_value(initial_value_{index}),\n'
+        string += f'.initial_value(initial_value[{index}]),\n'
+        string += f'.initial_value_enable(initial_value_enable[{index}]),\n'
+        string += f'.initial_down(initial_down[{index}]),\n'
         string += f'.check_value_input(value_check_to_variable_{index}),\n'
         string += f'.check_enable_input(enable_check_to_variable_{index}),\n'
-        string += f'.decision_down(),\n'
+        string += f'.decision_down(decision_down),\n'
+        string += f'.decoder_down(decoder_down),\n'
         string += f'.variable_value(value_variable_{index}_to_check),\n'
         string += f'.variable_enable(enable_variable_{index}_to_check)\n'
         string += f');\n\n'
@@ -154,11 +181,31 @@ with open(top_file,'a',encoding='utf-8') as f:
     f.write(string)
 
 
+# 校验部分与变量节点和校验节点的交互
+string = ''
+string += '''
+// 校验部分与变量节点和校验节点的交互
+always@(*)begin
+    // 如果校验失败且迭代次数未到最大值,开始进行校验节点的更新
+    if(decision_down & ~decision_success & ~decision_time_max) begin
+        /*check_begin 可以是一位也可以是多位,看后面优化的时候怎么说*/
+        check_begin = 1;
+    end
+    // 如果发现迭代次数到达最大值或者校验成功，那么译码结束
+    if(decision_time_max || decision_success) begin
+        /*这个也是,到底是一位还是多位优化时再考虑*/
+        decoder_down = 1;
+    end
+end
+'''
+with open(top_file,'a',encoding='utf-8') as f:
+    f.write(string)
+
 
 # 校验部分
 string = ''
 string += '// 将变量节点的enable值全部合并一下\n'
-for i in range(column):
+for i in range(column_number):
     string += f'assign decision_variable_enable[{i}] = enable_variable_{i}_to_check;\n'
 string += '''
 integer i;
@@ -179,7 +226,7 @@ case(decision_state)
 // 如果发现变量节点全部更新完毕,将变量节点的值进行判决然后计算
 if(~decision_variable_enable == 0) begin
 '''
-for i in range(column):
+for i in range(column_number):
     string += f'decision_information[{i}] <= value_variable_{i}_to_check;\n'
 string += f'// 变更状态，开始进行校验\n'
 string += "decision_state <= 3'd1;\n"
@@ -189,7 +236,22 @@ string += '''
 // 开始校验
 3'd1: begin
     // 一个周期完成校验
-    decision_result[{i}] <= decision_information[] ^ decision_information[] ...
+'''
+
+# 打开row.txt,找到对应的比特进行校验
+with open(file_path_row,'r') as f_row:
+    lines = f_row.readlines()
+    for index,row in enumerate(lines):
+        row_list = row.split(' ')
+        row_weight = row_list[0]
+        string += f'decision_result[{index}] <= '
+        for i in range(int(row_weight)):
+            if(i == int(row_weight)-1):
+                string += f'decision_information[{row_list[i+1]}];\n'
+            else:
+                string += f'decision_information[{row_list[i+1]}] ^ '
+
+string += '''
     decision_state <= 3'd2;
 end
 
@@ -205,8 +267,12 @@ end
     else begin
         decision_down <= 1;
         decision_success <= 0;
-        if(decision_times == {decision_times_max}) begin 
-            decision_times_max <= 1;
+'''
+
+string += f'        if(decision_times == {decision_time_max}) begin\n'
+
+string += '''
+            decision_time_max <= 1;
             decision_state <= 3'd4;
         end
         else begin 
@@ -218,7 +284,7 @@ end
 
 3'd3: begin
     decision_down <= 0;
-    decision_times_max <= 0;
+    decision_time_max <= 0;
     decision_success <= 0;
     decision_state <= 3'd0;
 end
@@ -229,13 +295,13 @@ end
     decision_state <= 3'd3;
 end
 
-end
 '''
 
 
 
 with open(top_file,'a',encoding='utf-8') as f:
-    f.write('endcase')
-    f.write('end')
-    f.write('end')
-    f.write('endmodule')
+    f.write(string)
+    f.write('endcase\n')
+    f.write('end\n')
+    f.write('end\n')
+    f.write('endmodule\n')
