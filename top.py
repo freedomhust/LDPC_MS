@@ -13,9 +13,9 @@ length = 6
 # 单次译码过程中，迭代的最大次数
 decision_time_max = 50
 
-top_file = r'H:\\LDPC_MS\\top.v'
+top_file = r'H:\\LDPC_MS\\Decoder.v'
 string = '''
-module top(
+module Decoder(
 input clk,
 input rst,
 input demodulation_down_to_decoder,
@@ -23,7 +23,13 @@ output reg demodulation_to_decoder_receive,
 // 解调后的数据
 '''
 # 解调后的数据
-string += f'input [{length*column_number-1}:0]initial_value_input,\n'
+string += f'input [{length*column_number-1}:0] initial_value_input,\n'
+string += f'// 初始比特流\n'
+string += f'input [{column_number-1}:0] demodulation_sequence,\n'
+string += f'// 输出初始的信息序列\n'
+string += f'output reg [{column_number-1}:0] prototype_sequence,\n'
+string += f'// 译码过后的信息序列，用于计算误比特率\n'
+string += f'output reg [{column_number-1}:0] decision_information,\n'
 string += f'output reg decoder_down\n);\n'
 
 # 先将top模块的接口定义了
@@ -36,22 +42,23 @@ string += '// 对initial_value进行拆分\n'
 string += f'wire [{length-1}:0] initial_value[{column_number-1}:0];\n'
 for i in range(column_number):
     string += f'assign initial_value[{i}] = initial_value_input[{(i+1)*length-1}:{i*length}];\n'
+string += '\n\n'
 with open(top_file,'a',encoding='utf-8') as f:
     f.write(string)
 
 # 定义跟判决部分有关的变量
 string = ''
+string += '// 定义跟判决部分有关的变量\n'
 string += f'reg [{column_number-1}:0]initial_value_enable;\n'
 string += f'wire [{column_number-1}:0]initial_down;\n'
 string += f'reg check_begin;\n'
 string += f'reg [2:0] decision_state;\n'
 string += f'reg decision_down;\n'
 string += f'reg decision_success;\n'
-string += f'reg [{column_number-1}:0]decision_information;\n'
 string += f'reg [9:0] decision_times;\n'
 string += f'reg [{column_number-1}:0]decision_result;\n'
 string += f'reg decision_time_max;\n'
-string += f'wire [{column_number-1}:0]decision_variable_enable;\n'
+string += f'wire [{column_number-1}:0]decision_variable_enable;\n\n\n'
 with open(top_file,'a',encoding='utf-8') as f:
     f.write(string)
 
@@ -78,11 +85,11 @@ with open(file_path_row,'r') as f_row:
             string += f'wire [{length-1}:0] value_variable_{row_list[i+1]}_to_check_{index};\n'
             string += f'wire enable_variable_{row_list[i+1]}_to_check_{index};\n'
             # 将校验节点的输出值进行拆分
-            string += f'// 对校验节点的输出值进行拆分\n'
+            string += f'// 对校验节点{index}的输出值进行拆分\n'
             string += f'assign value_check_{index}_to_variable_{row_list[i+1]} = value_check_{index}_to_variable[{length*(i+1)-1}:{length*i}];\n'
             string += f'assign enable_check_{index}_to_variable_{row_list[i+1]} = enable_check_{index}_to_variable[{i}];\n'
             # 对变量节点传递过来的值进行组合
-            string += f'// 对变量节点传递过来的值进行组合\n'
+            string += f'// 对变量节点{row_list[i+1]}传递过来的值进行组合\n'
             string += f'assign value_variable_to_check_{index}[{length*(i+1)-1}:{length*i}] = value_variable_{row_list[i+1]}_to_check_{index};\n'
             string += f'assign enable_variable_to_check_{index}[{i}] = enable_variable_{row_list[i+1]}_to_check_{index};\n'
         string += '\n'
@@ -163,6 +170,7 @@ string += '''
 always@(*)begin
     // 调制结束，开始进行译码
     if(demodulation_down_to_decoder)begin
+        prototype_sequence <= demodulation_sequence;
         initial_value_enable = 0-1;
     end
     else begin
@@ -196,6 +204,7 @@ always@(*)begin
         /*这个也是,到底是一位还是多位优化时再考虑*/
         decoder_down = 1;
     end
+    else decoder_down = 0;
 end
 '''
 with open(top_file,'a',encoding='utf-8') as f:
