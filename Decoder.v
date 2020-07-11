@@ -5,13 +5,7 @@ input rst,
 input demodulation_down_to_decoder,
 output reg demodulation_to_decoder_receive,
 // 解调后的数据
-input [71:0] initial_value_input,
-// 初始比特流
-input [11:0] demodulation_sequence,
-// 输出初始的信息序列
-output reg [11:0] prototype_sequence,
-// 译码过后的信息序列，用于计算误比特率
-output reg [11:0] decision_information,
+input [71:0]initial_value_input,
 output reg decoder_down
 );
 // 对initial_value进行拆分
@@ -28,21 +22,17 @@ assign initial_value[8] = initial_value_input[53:48];
 assign initial_value[9] = initial_value_input[59:54];
 assign initial_value[10] = initial_value_input[65:60];
 assign initial_value[11] = initial_value_input[71:66];
-
-
-// 定义跟判决部分有关的变量
 reg [11:0]initial_value_enable;
 wire [11:0]initial_down;
 reg check_begin;
 reg [2:0] decision_state;
 reg decision_down;
 reg decision_success;
+reg [11:0]decision_information;
 reg [9:0] decision_times;
 reg [11:0]decision_result;
 reg decision_time_max;
 wire [11:0]decision_variable_enable;
-
-
 // 校验节点0的接口
 wire [35:0] value_variable_to_check_0;
 wire [35:0] value_check_0_to_variable;
@@ -1033,7 +1023,6 @@ Variable_Node #(.weight(3), .length(6)) u_Variable_Node_11(
 always@(*)begin
     // 调制结束，开始进行译码
     if(demodulation_down_to_decoder)begin
-        prototype_sequence <= demodulation_sequence;
         initial_value_enable = 0-1;
     end
     else begin

@@ -102,7 +102,7 @@ module Check_Node #(parameter
           end
           // 判决结束，发现校验不成功，开始更新变量节点的值
           /*需要考虑一下这个判决要不要放在top模块，然后只传一个check_begin进来*/
-          if(decision_down & ~decision_success)begin
+          if(check_begin)begin
               // 这里为查找最小值和次小值做准备
               if(variable_value[0] < variable_value[1])begin
                 Minimum_value <= variable_value[0];
