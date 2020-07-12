@@ -2,10 +2,10 @@
 生成top.v,用于变量节点与校验节点之间的连接
 '''
 
-file_path_row = r'H:\\LDPC_MS\\row.txt'
-file_path_column = r'H:\\LDPC_MS\\column.txt'
-row_number = 6
-column_number = 12
+file_path_row = 'H:\\LDPC_MS\\H_matrix\\reverse\\row_256_128.txt'
+file_path_column = 'H:\\LDPC_MS\\H_matrix\\reverse\\column_256_128.txt'
+row_number = 128
+column_number = 256
 row_weight = 6
 column_weight = 3
 length = 6
@@ -18,18 +18,21 @@ string = '''
 module Decoder(
 input clk,
 input rst,
+// 解调结束
 input demodulation_down_to_decoder,
+// 接收到解调结束信号
 output reg demodulation_to_decoder_receive,
 // 解调后的数据
 '''
 # 解调后的数据
 string += f'input [{length*column_number-1}:0] initial_value_input,\n'
 string += f'// 初始比特流\n'
-string += f'input [{column_number-1}:0] demodulation_sequence,\n'
+string += f'input [{column_number-1}:0] demodulation_prototype_sequence,\n'
 string += f'// 输出初始的信息序列\n'
 string += f'output reg [{column_number-1}:0] prototype_sequence,\n'
 string += f'// 译码过后的信息序列，用于计算误比特率\n'
 string += f'output reg [{column_number-1}:0] decision_information,\n'
+string += f'// 本次译码结束\n'
 string += f'output reg decoder_down\n);\n'
 
 # 先将top模块的接口定义了
@@ -77,7 +80,7 @@ with open(file_path_row,'r') as f_row:
         string += f'wire [{length*int(row_weight) - 1}:0] value_variable_to_check_{index};\n'
         string += f'wire [{length*int(row_weight) - 1}:0] value_check_{index}_to_variable;\n'
         string += f'wire [{int(row_weight)-1}:0] enable_variable_to_check_{index};\n'
-        string += f'wire [{int(row_weight)-1}:0] enable_check_{index}_to_variable;\n'
+        string += f'wire [{int(row_weight)-1}:0] enable_check_{index}_to_variable;\n\n'
         for i in range(int(row_weight)):
             string += f'// 拆分后校验节点{index}传递给变量节点{row_list[i+1]}的值以及对变量节点{row_list[i+1]}传递过来的值\n'
             string += f'wire [{length-1}:0] value_check_{index}_to_variable_{row_list[i+1]};\n'
@@ -91,7 +94,7 @@ with open(file_path_row,'r') as f_row:
             # 对变量节点传递过来的值进行组合
             string += f'// 对变量节点{row_list[i+1]}传递过来的值进行组合\n'
             string += f'assign value_variable_to_check_{index}[{length*(i+1)-1}:{length*i}] = value_variable_{row_list[i+1]}_to_check_{index};\n'
-            string += f'assign enable_variable_to_check_{index}[{i}] = enable_variable_{row_list[i+1]}_to_check_{index};\n'
+            string += f'assign enable_variable_to_check_{index}[{i}] = enable_variable_{row_list[i+1]}_to_check_{index};\n\n'
         string += '\n'
 with open(top_file,'a',encoding='utf-8') as f:
     f.write(string)
@@ -109,7 +112,8 @@ with open(file_path_column,'r') as f_column:
         string += f'// 变量节点{index}的接口\n'
         string += f'wire [{int(column_weight)*length-1}:0] value_check_to_variable_{index};\n'
         string += f'wire [{int(column_weight)-1}:0] enable_check_to_variable_{index};\n'
-        string += f'wire [{length-1}:0] value_variable_{index}_to_check;\n'
+        string += f'wire [{length-1}:0] value_variable_{index}_to_decision;\n'
+        string += f'wire [{int(column_weight)*length-1}:0] value_variable_{index}_to_check;\n\n'
         string += f'wire enable_variable_{index}_to_check;\n'
         for i in range(int(column_weight)):
             # 对校验节点传递过来的数据进行整合
@@ -117,8 +121,8 @@ with open(file_path_column,'r') as f_column:
             string += f'assign value_check_to_variable_{index}[{length*(i+1)-1}:{length*i}] = value_check_{column_list[i+1]}_to_variable_{index};\n'
             string += f'assign enable_check_to_variable_{index}[{i}] = enable_check_{column_list[i+1]}_to_variable_{index};\n'
             string += f'// 将变量节点{index}的输出与校验节点{column_list[i+1]}的输入相连\n'
-            string += f'assign value_variable_{index}_to_check_{column_list[i+1]} = value_variable_{index}_to_check;\n'
-            string += f'assign enable_variable_{index}_to_check_{column_list[i+1]} = enable_variable_{index}_to_check;\n'
+            string += f'assign value_variable_{index}_to_check_{column_list[i+1]} = value_variable_{index}_to_check[{length*(i+1)-1}:{length*i}];\n'
+            string += f'assign enable_variable_{index}_to_check_{column_list[i+1]} = enable_variable_{index}_to_check;\n\n'
         string += f'\n'
 with open(top_file,'a',encoding='utf-8') as f:
     f.write(string)
@@ -156,7 +160,8 @@ with open(file_path_column,'r') as f_column:
         string += f'.check_enable_input(enable_check_to_variable_{index}),\n'
         string += f'.decision_down(decision_down),\n'
         string += f'.decoder_down(decoder_down),\n'
-        string += f'.variable_value(value_variable_{index}_to_check),\n'
+        string += f'.variable_value(value_variable_{index}_to_decision),\n'
+        string += f'.value_variable_to_check(value_variable_{index}_to_check),\n'
         string += f'.variable_enable(enable_variable_{index}_to_check)\n'
         string += f');\n\n'
     string += '\n'
@@ -170,7 +175,7 @@ string += '''
 always@(*)begin
     // 调制结束，开始进行译码
     if(demodulation_down_to_decoder)begin
-        prototype_sequence <= demodulation_sequence;
+        prototype_sequence <= demodulation_prototype_sequence;
         initial_value_enable = 0-1;
     end
     else begin
@@ -236,7 +241,7 @@ case(decision_state)
 if(~decision_variable_enable == 0) begin
 '''
 for i in range(column_number):
-    string += f'decision_information[{i}] <= value_variable_{i}_to_check;\n'
+    string += f'decision_information[{i}] <= value_variable_{i}_to_decision[{length-1}];\n'
 string += f'// 变更状态，开始进行校验\n'
 string += "decision_state <= 3'd1;\n"
 string += 'end\nend\n'

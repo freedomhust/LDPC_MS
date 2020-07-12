@@ -12,6 +12,7 @@ module Demodulation#(parameter
     row_weight = 6,                                              // 行重，不过没啥用
     column_weight = 3,                                           // 列重，也没啥用
     Iteration_Times = 50,                                        // 一段序列进行BF翻转的次数
+    Length = 6,                                                  // 比特位宽
     Sigma_Iteration_Times = 20                                   // 解码了多少序列了
     `define InfoLen (CodeLen - ChkLen)                          // 信息比特的长度
 )(
@@ -37,20 +38,30 @@ module Demodulation#(parameter
     // 与解码部分的交互
     input demodulation_to_decoder_receive,
     output reg demodulation_down_to_decoder,
-    output reg [CodeLen-1:0] demodulation_sequence,
+    output [Length*CodeLen-1:0] demodulation_sequence,
     output reg [CodeLen-1:0] demodulation_sequence_prototype
     );
     
+    
     reg [2:0] demodulation_state;
-    //reg [CodeLen-1:0] demodulation_sequence;
+    reg [Length-1:0] demodulation_sequence_reg[CodeLen-1:0];
     reg [CodeLen_bits:0] demodulation_a;
     reg [CodeLen_bits:0] demodulation_b;
     
+
+    // 对输出进行整合
+    genvar i;
+    generate
+        for(i = 0; i<CodeLen; i=i+1)begin
+            assign demodulation_sequence[Length*(i+1)-1 : Length*i] = demodulation_sequence_reg[i];
+        end
+    endgenerate
+
     always@(posedge clk or negedge rst or negedge modulation_rst) begin
         if(~rst || ~modulation_rst) begin
             demodulation_down_to_modulation <= 'd0;
             demodulation_down_to_decoder <= 'd0;
-            demodulation_sequence <= 'd0;
+            // demodulation_sequence <= 'd0;
             demodulation_state <= 'd0;
             demodulation_receive <= 'd0;
             demodulation_sequence_prototype <= 'd0;
@@ -82,11 +93,11 @@ module Demodulation#(parameter
                 3'd2: begin
                     if(demodulation_a != CodeLen && demodulation_b != CodeLen+1) begin
                         if(demodulation_valid_a)begin
-                            demodulation_sequence[demodulation_a] <= douta[14];
+                            demodulation_sequence_reg[demodulation_a] <= {Length*douta[14]};
                             demodulation_a <= demodulation_a + 2;
                         end
                         if(demodulation_valid_b)begin
-                            demodulation_sequence[demodulation_b] <= doutb[14];
+                            demodulation_sequence_reg[demodulation_b] <= {Length*doutb[14]};
                             demodulation_b <= demodulation_b + 2;
                         end 
                     end
@@ -107,7 +118,7 @@ module Demodulation#(parameter
                     end
                     if(demodulation_to_decoder_receive)begin
                         demodulation_down_to_decoder <= 'd0;
-                        demodulation_sequence <= 'd0;
+                        // demodulation_sequence <= 'd0;
                         demodulation_state <= 3'd0;
                     end
 

@@ -5,13 +5,12 @@ created time: 2020/7/3
 '''
 
 import os
+import sys
 
 # 这里的参数可以考虑写一个profile.txt来进行配置
-file_path = r'H:\\LDPC_MS\\H_matrix.txt'
-file_path_row = r'H:\\LDPC_MS\\row.txt'
-file_path_column = r'H:\\LDPC_MS\\column.txt'
-column_length = 12
-row_length = 6
+file_path = 'H:\\LDPC_MS\\H_matrix\\reverse\\H_matrix_1024_512.txt'
+file_path_row = 'H:\\LDPC_MS\\H_matrix\\reverse\\row_1024_512.txt'
+file_path_column = 'H:\\LDPC_MS\\H_matrix\\reverse\\column_1024_512.txt'
 columns = []
 rows = []
 
@@ -23,11 +22,17 @@ if(os.path.exists(file_path) == False):
 # 删除之前存在的文件
 if(os.path.exists(file_path_row)):
     os.remove(file_path_row)
+
+# open(file_path_row,'w')
+
 if(os.path.exists(file_path_column)):
     os.remove(file_path_column)
 
+# open(file_path_column,'w')
+
 with open(file_path,'r') as f:
     lines = f.readlines()
+    # print(lines)
     # 计算该行有多少个1
     for index,row in enumerate(lines):
         columns = []
@@ -42,7 +47,11 @@ with open(file_path,'r') as f:
                 f_row.write(j)
                 f_row.write(' ')
             f_row.write('\n')
-    
+    # print(lines[0])
+    column_length = len(lines[0])-1
+    row_length = len(lines)
+    # print(column_length,row_length)
+
     # 计算一列有多少个1
     for column_index in range(column_length):
         rows = []
